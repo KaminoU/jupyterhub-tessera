@@ -1,0 +1,370 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [main]
+
+# Least privilege by default. The publish job raises what it needs locally.
+permissions:
+  contents: read
+
+jobs:
+  # ===========================================================================
+  # Lock files - the dependency graph on disk must match pyproject.toml
+  # ===========================================================================
+  lock-check:
+    name: Lock files sync
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9
+
+      - name: Check uv.lock is up to date
+        run: uv lock --check
+
+      - name: Check pylock.toml matches uv.lock
+        run: |
+          # The export writes the whole document to stdout as well as to the
+          # output file, hence the redirection. Its second line records the
+          # command that produced it, so the comparison starts at line 3.
+          uv export --format pylock.toml --all-extras -o pylock.check.toml > /dev/null
+          if ! diff -q <(tail -n +3 pylock.toml) <(tail -n +3 pylock.check.toml) > /dev/null; then
+            echo "::error::pylock.toml is out of sync with uv.lock"
+            echo "Run: uv export --format pylock.toml --all-extras -o pylock.toml"
+            diff <(tail -n +3 pylock.toml) <(tail -n +3 pylock.check.toml) | head -50 || true
+            exit 1
+          fi
+          echo "pylock.toml is in sync with uv.lock"
+
+  # ===========================================================================
+  # Frontend - the single source of truth for the labextension bundle
+  #
+  # Every Python job downloads the bundle this job publishes. Its presence
+  # arms the skip-if-exists guard of the jupyter-builder build hook, so no
+  # other job ever shells out to npm and the bundle is built exactly once.
+  # ===========================================================================
+  frontend:
+    name: Frontend (TypeScript)
+    runs-on: ubuntu-latest
+    needs: [lock-check]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9
+        with:
+          enable-cache: true
+          python-version: '3.10'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      # The production bundle is built by `jupyter labextension build`, a
+      # Python entry point, so this Node job also needs the Python toolchain.
+      # --no-install-project is required: installing the project would fire
+      # the editable jupyter-builder hook and run a development bundle just
+      # before the production one. The environment is kept outside the
+      # workspace because prettier:check globs **/*.{ts,tsx,css,json,md} and
+      # would otherwise walk the whole virtualenv.
+      - name: Install the jupyter build toolchain
+        run: |
+          uv sync --extra dev --no-install-project
+          echo "$UV_PROJECT_ENVIRONMENT/bin" >> "$GITHUB_PATH"
+        env:
+          UV_PROJECT_ENVIRONMENT: ${{ runner.temp }}/tessera-venv
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run eslint:check
+
+      - name: Format check
+        run: npm run prettier:check
+
+      - name: Test with coverage
+        run: npm run test:coverage
+
+      - name: Build the production bundle
+        run: npm run build:prod
+
+      - name: Upload the labextension bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: labextension
+          path: src/tessera/labextension
+
+  # ===========================================================================
+  # Lint and type check - the tox lint environment
+  # ===========================================================================
+  lint:
+    name: Lint and type check
+    runs-on: ubuntu-latest
+    needs: [lock-check, frontend]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9
+        with:
+          enable-cache: true
+          python-version: '3.10'
+
+      # Must land before the install: see the frontend job header.
+      - name: Download the labextension bundle
+        uses: actions/download-artifact@v7
+        with:
+          name: labextension
+          path: src/tessera/labextension
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run Ruff linter
+        run: uv run ruff check src tests infra --output-format=github
+
+      - name: Run Ruff formatter check
+        run: uv run ruff format --check src tests infra
+
+      # The checked paths come from the mypy config in pyproject.toml.
+      - name: Run mypy
+        run: uv run mypy
+
+  # ===========================================================================
+  # Test matrix - the tox default environment, one job per Python version
+  # ===========================================================================
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    needs: [lock-check, frontend]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
+
+    env:
+      # The CLI tests assert on plain captured output, so colors stay off for
+      # the code under test. --color=yes below only colors the pytest report.
+      NO_COLOR: '1'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python-version }}
+
+      # Must land before the install: see the frontend job header.
+      - name: Download the labextension bundle
+        uses: actions/download-artifact@v7
+        with:
+          name: labextension
+          path: src/tessera/labextension
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      # The e2e and stress tiers are opt-in and already excluded by the
+      # pytest addopts, so this run covers the unit and service tiers.
+      - name: Run the test suite with coverage
+        run: >
+          uv run pytest tests/
+          --color=yes
+          --cov=tessera
+          --cov-report=term-missing
+          --cov-fail-under=95
+          --tb=short
+          -v
+
+  # ===========================================================================
+  # Doctests - docstring examples must be executable and accurate
+  # ===========================================================================
+  doctest:
+    name: Doctests
+    runs-on: ubuntu-latest
+    needs: [lock-check, frontend]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9
+        with:
+          enable-cache: true
+          python-version: '3.10'
+
+      # Must land before the install: see the frontend job header.
+      - name: Download the labextension bundle
+        uses: actions/download-artifact@v7
+        with:
+          name: labextension
+          path: src/tessera/labextension
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run the doctests
+        run: |
+          # pytest exits 5 when no doctest is collected; tolerate that single
+          # case while real failures still fail the job.
+          uv run python -c "import sys, pytest; rc = pytest.main(['--doctest-modules', 'src/tessera', '--ignore=src/tessera/__main__.py', '--ignore=src/tessera/cli', '-v', '--tb=short', '--color=yes']); sys.exit(0 if rc == 5 else rc)"
+
+  # ===========================================================================
+  # Documentation - a warning is an error, and a failed build blocks release
+  # ===========================================================================
+  docs:
+    name: Build docs (Sphinx)
+    runs-on: ubuntu-latest
+    needs: [lock-check, frontend]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9
+        with:
+          enable-cache: true
+          python-version: '3.10'
+
+      # Must land before the install: see the frontend job header.
+      - name: Download the labextension bundle
+        uses: actions/download-artifact@v7
+        with:
+          name: labextension
+          path: src/tessera/labextension
+
+      - name: Install documentation dependencies
+        run: uv sync --extra docs
+
+      - name: Build the documentation
+        run: uv run sphinx-build --color -W -b html docs/source docs/build/html
+
+  # ===========================================================================
+  # Build - the distributions that get published
+  # ===========================================================================
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    needs: [frontend, lint, test]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9
+        with:
+          enable-cache: true
+          python-version: '3.10'
+
+      # Must land before the build: the wheel ships this bundle, and its
+      # presence keeps the build hook from rebuilding it with npm.
+      - name: Download the labextension bundle
+        uses: actions/download-artifact@v7
+        with:
+          name: labextension
+          path: src/tessera/labextension
+
+      - name: Build the sdist and the wheel
+        run: uv build
+
+      - name: Check the distribution metadata
+        run: uvx twine check dist/*
+
+      - name: Upload the distributions
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+  # ===========================================================================
+  # Version check - the tag must match every version declared in the tree
+  # ===========================================================================
+  version-check:
+    name: Version check
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compare the tag with every declared version
+        run: |
+          # No install: every version is read straight from its source file.
+          TAG="${GITHUB_REF#refs/tags/v}"
+          PY_VERSION=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/tessera/meta.py)
+          TS_VERSION=$(sed -n "s/^export const PANEL_VERSION = '\(.*\)';$/\1/p" frontend/src/version.ts)
+          NPM_VERSION=$(sed -n 's/^  "version": "\(.*\)",$/\1/p' package.json)
+
+          # A pre-release is spelled 1.0.0rc1 on the Python side (the tag and
+          # meta.py) and 1.0.0-rc.1 on the npm side (package.json, plus
+          # version.ts which a test pins to it). Fold the npm spelling onto the
+          # Python one before comparing. A final version carries no pre-release
+          # segment, so it passes through untouched and is still compared
+          # exactly: 1.0.0rc1 and 1.0.0rc2 stay different.
+          #
+          # MIRROR: tests/test_meta.py folds the same forms in the same order.
+          # Change one without the other and a real drift ships green.
+          canon() {
+            printf '%s\n' "$1" |
+              sed -e 's/-alpha\./a/' -e 's/-beta\./b/' -e 's/-rc\./rc/' \
+                  -e 's/-alpha/a/'   -e 's/-beta/b/'   -e 's/-rc/rc/'
+          }
+
+          echo "tag           : $TAG"
+          echo "meta.py       : $PY_VERSION"
+          echo "version.ts    : $TS_VERSION"
+          echo "package.json  : $NPM_VERSION"
+          if [ "$(canon "$TAG")" != "$(canon "$PY_VERSION")" ] ||
+             [ "$(canon "$TAG")" != "$(canon "$TS_VERSION")" ] ||
+             [ "$(canon "$TAG")" != "$(canon "$NPM_VERSION")" ]; then
+            echo "::error::version mismatch: tag=$TAG, meta.py=$PY_VERSION, version.ts=$TS_VERSION, package.json=$NPM_VERSION"
+            exit 1
+          fi
+          echo "Every declared version matches the tag"
+
+  # ===========================================================================
+  # Publish - trusted publishing to PyPI, tags only, after every gate is green
+  # ===========================================================================
+  publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: [lock-check, frontend, lint, test, doctest, docs, build, version-check]
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    environment:
+      name: pypi
+      url: https://pypi.org/project/jupyterhub-tessera/
+
+    permissions:
+      # Required for trusted publishing. No long lived token is stored.
+      id-token: write
+
+    steps:
+      - name: Download the distributions
+        uses: actions/download-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          print-hash: true

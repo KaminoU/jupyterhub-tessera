@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "declaration": true,
+    "esModuleInterop": true,
+    "jsx": "react",
+    "lib": ["DOM", "DOM.Iterable", "ES2020"],
+    "module": "esnext",
+    "moduleResolution": "node",
+    "noEmitOnError": true,
+    "noImplicitAny": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "outDir": "lib",
+    "rootDir": "frontend/src",
+    "strict": true,
+    "strictNullChecks": true,
+    "target": "ES2018",
+    "types": []
+  },
+  "include": ["frontend/src/**/*"],
+  "exclude": [
+    "frontend/src/**/__tests__/**",
+    "frontend/src/**/*.test.ts",
+    "frontend/src/**/*.test.tsx"
+  ]
+}

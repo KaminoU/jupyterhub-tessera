@@ -1,0 +1,111 @@
+name: Bug report
+description: Report a defect in the service, the panel, or the kernel client
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing: a `403` from the Hub is almost always a missing grant in your
+        `jupyterhub_config.py` rather than a defect in tessera. The troubleshooting
+        section of the [deployment guide](https://github.com/KaminoU/jupyterhub-tessera/blob/main/docs/source/guide/deployment.md)
+        lists the usual causes and the command that confirms each one.
+
+  - type: input
+    id: version
+    attributes:
+      label: tessera version
+      description: The `Version` line of `pip show jupyterhub-tessera`, read in the environment that runs the Hub.
+      placeholder: 1.0.0
+    validations:
+      required: true
+
+  - type: input
+    id: tier-1
+    attributes:
+      label: "Tier 1: the service host"
+      description: JupyterHub and Python versions of the environment running the Hub (`jupyterhub --version`, `python --version`).
+      placeholder: JupyterHub 5.2.1, Python 3.11.9
+    validations:
+      required: true
+
+  - type: input
+    id: tier-2
+    attributes:
+      label: "Tier 2: the JupyterLab panel"
+      description: JupyterLab version and the tessera line of `jupyter labextension list`, read in the single-user environment. Write `not used` when the panel is not involved.
+      placeholder: JupyterLab 4.2.5, tessera v1.0.0 enabled OK
+    validations:
+      required: true
+
+  - type: input
+    id: tier-3
+    attributes:
+      label: "Tier 3: kernel access"
+      description: Python version of the kernel environment, and whether `import tessera.kernel` succeeds there. Write `not used` when no notebook reads a token.
+      placeholder: Python 3.10.14, import ok
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider-mode
+    attributes:
+      label: Provider mode
+      description: How the affected server declares its provider in the configuration file.
+      options:
+        - Discovery (a single issuer URL)
+        - Explicit (authorization_endpoint and token_endpoint)
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: What you did, in order. Keep hostnames, realms, and client ids generic if yours are internal.
+      placeholder: |
+        1. Click the button for server "my-idp"
+        2. Authenticate at the provider
+        3. Land back on the panel
+    validations:
+      required: true
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and observed
+      description: What you expected to happen, and what happened instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Diagnostic output
+      description: "Paste the output of `tessera doctor -c <your config>` (it never prints a secret)."
+      render: shell
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Service, Hub, or browser console output around the failure.
+
+        Sanitize before pasting. tessera never logs a token value, but the logs of your
+        Hub, your proxy, or your provider can carry one, and so can a URL captured in
+        the middle of the flow.
+
+        Never paste a token, a client secret, or a store encryption key.
+      render: shell
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I read the troubleshooting section of the deployment guide.
+          required: true
+        - label: My report contains no token, client secret, or store key.
+          required: true

@@ -1,0 +1,202 @@
+#!/bin/sh
+#
+# tessera pre-commit hook. Install it with `make hook`.
+#
+# Every check reads the staged content only, and the content checks look at
+# added lines, so removing an offending line stays committable.
+#
+# This file ships in a public repository, so it carries generic rules only.
+# Strings that are specific to one deployment (host names, realms, an
+# organization name) belong in an untracked local file, read below.
+#
+# Never bypass this hook with --no-verify: it also guards the checks that a
+# reviewer cannot catch by reading a diff.
+
+set -u
+
+# One pattern per line, extended regular expressions, blanks and # comments
+# ignored. The default sits among the dot entries the repository already
+# ignores, so it is never committed and never shipped. Point the variable
+# elsewhere to keep the list with your own notes.
+PATTERNS_FILE="${TESSERA_LOCAL_PATTERNS:-.tessera-patterns.local}"
+MARKER=".github/.tests-passed"
+EM_DASH=$(printf '\342\200\224')
+
+# Files whose content decides whether the test suites still hold. Workflow
+# files are deliberately absent: none of them takes part in a local suite, and
+# a workflow cannot even run locally, so demanding a full suite for a file that
+# suite never reads would teach people to walk around the hook. The CI is its
+# own gate on push.
+FUNCTIONAL='\.(py|ts|tsx)$|(^|/)(pyproject\.toml|package\.json|package-lock\.json|uv\.lock|pylock\.toml|tox\.ini|Makefile|tsconfig\.json|eslint\.config\.mjs)$'
+
+status=0
+
+refuse() {
+    printf 'pre-commit: REFUSED, %s\n' "$1" >&2
+    printf '%s\n' "$2" | sed 's/^/  /' >&2
+    if [ -n "${3:-}" ]; then
+        printf '  fix: %s\n' "$3" >&2
+    fi
+    status=1
+    return 0
+}
+
+# Staged files whose ADDED lines match an extended regex. Any argument after
+# the pattern restricts the scan to that pathspec.
+staged_matching() {
+    pattern=$1
+    shift
+    git diff --cached --name-only --diff-filter=ACM -- "$@" | while IFS= read -r file; do
+        if git diff --cached --no-color -U0 -- "$file" |
+            grep '^+' | grep -v '^+++' | grep -Eq -- "$pattern"; then
+            printf '%s\n' "$file"
+        fi
+    done
+}
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+if [ -z "$staged" ]; then
+    printf 'pre-commit: nothing staged\n'
+    exit 0
+fi
+
+# --- Em dash ---------------------------------------------------------------
+hits=$(staged_matching "$EM_DASH")
+if [ -n "$hits" ]; then
+    refuse "an em dash was added" "$hits" "use a comma, a colon, or two sentences"
+fi
+
+# --- Files that must never be committed ------------------------------------
+hits=$(printf '%s\n' "$staged" |
+    grep -E '\.(db|sqlite[0-9]*|key|pem)$|(^|/)(\.env|\.tests-passed)$' || true)
+if [ -n "$hits" ]; then
+    refuse "a store, a key, or a local-only file is staged" "$hits" \
+        "git restore --staged the paths above"
+fi
+
+# --- Secrets, by shape -----------------------------------------------------
+#
+# Only shapes that are never anything but a credential. Naming a field is not
+# a leak: this project documents client_secret_env and seeds deliberately
+# fabricated fixtures, and both have to stay committable. What is specific to
+# a deployment is handled by the confidential pattern check below instead.
+#
+# The matching value is never printed back, only the file it sits in.
+hits=$(staged_matching 'BEGIN [A-Z ]*PRIVATE KEY')
+if [ -n "$hits" ]; then
+    refuse "a private key block is staged" "$hits" "keep keys out of the tree"
+fi
+
+hits=$(staged_matching 'eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}')
+if [ -n "$hits" ]; then
+    refuse "something shaped like a signed token is staged" "$hits" \
+        "drop the value, a length or a redaction is enough"
+fi
+
+hits=$(staged_matching 'Bearer[[:space:]]+[A-Za-z0-9._~+/-]{20,}')
+if [ -n "$hits" ]; then
+    refuse "an Authorization value is staged" "$hits" \
+        "drop the value, a length or a redaction is enough"
+fi
+
+hits=$(staged_matching '(AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{50,}|xox[baprs]-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9]{32,})')
+if [ -n "$hits" ]; then
+    refuse "a provider credential is staged" "$hits" "revoke it, then remove it"
+fi
+
+hits=$(staged_matching '(SECRET|_KEY|_TOKEN)=[A-Za-z0-9/+_-]{12,}')
+if [ -n "$hits" ]; then
+    refuse "a secret is assigned a literal value" "$hits" \
+        "read it from the environment or a file instead"
+fi
+
+# The service refuses a cleartext client_secret at load time. Catch it here
+# too, before it reaches a commit.
+hits=$(staged_matching '^\+[[:space:]]*client_secret:[[:space:]]*[^[:space:]#]' '*.yml' '*.yaml')
+if [ -n "$hits" ]; then
+    refuse "a cleartext client_secret is staged" "$hits" \
+        "use client_secret_env or client_secret_file"
+fi
+
+# --- Confidential patterns, from an untracked local file -------------------
+#
+# The patterns are folded into one alternation rather than passed as a pattern
+# file: a temporary file is not writable everywhere, and a check that skips
+# itself when it cannot write is worse than no check at all. Blank lines and
+# comments are dropped (a blank pattern matches every line) and carriage
+# returns are stripped so a file saved on Windows still matches.
+if [ -f "$PATTERNS_FILE" ]; then
+    patterns=$(grep -Ev '^[[:space:]]*(#|$)' "$PATTERNS_FILE" 2>/dev/null |
+        tr -d '\r' | tr '\n' '|' | sed 's/|$//')
+    if [ -n "$patterns" ]; then
+        hits=$(git diff --cached --name-only --diff-filter=ACM | while IFS= read -r file; do
+            if git diff --cached --no-color -U0 -- "$file" |
+                grep '^+' | grep -v '^+++' | grep -Eiq -- "$patterns"; then
+                printf '%s\n' "$file"
+            fi
+        done)
+        if [ -n "$hits" ]; then
+            refuse "a local confidential pattern matched" "$hits" \
+                "rewrite it generically, this repository is public"
+        fi
+    else
+        printf 'pre-commit: %s holds no pattern, confidential scan skipped\n' "$PATTERNS_FILE"
+    fi
+else
+    printf 'pre-commit: no %s, confidential scan skipped\n' "$PATTERNS_FILE"
+fi
+
+# --- Unfinished local notes, a warning only --------------------------------
+#
+# The notes that define this convention spell the marker out, so a plain
+# search flags its own documentation at every commit, and a warning that
+# always fires is a warning nobody reads. Skip the lines whose reason is
+# nothing but a <placeholder>. A real marker states a real reason, and one
+# that merely happens to contain a < still fires.
+if [ -d .claude ]; then
+    wip=$(grep -rn '> \*\*WIP\*\*' .claude 2>/dev/null |
+        grep -Ev '> \*\*WIP\*\*[[:space:]]*:?[[:space:]]*<[^>]*>[[:space:]]*(`|\||$)' |
+        cut -d: -f1 | sort -u || true)
+    if [ -n "$wip" ]; then
+        printf 'pre-commit: WARNING, unfinished notes carry a WIP marker:\n' >&2
+        printf '%s\n' "$wip" | sed 's/^/  /' >&2
+    fi
+fi
+
+# --- Lock files ------------------------------------------------------------
+if command -v uv >/dev/null 2>&1; then
+    if ! uv lock --check >/dev/null 2>&1; then
+        refuse "uv.lock no longer matches pyproject.toml" "uv.lock" \
+            "run: uv lock && uv export --format pylock.toml --all-extras -o pylock.toml"
+    fi
+else
+    printf 'pre-commit: uv not found, lock check skipped (the CI job is the authority)\n'
+fi
+
+# --- The full suite marker -------------------------------------------------
+#
+# This hook never runs the suites: it only refuses to believe they passed.
+functional=$(printf '%s\n' "$staged" | grep -E "$FUNCTIONAL" || true)
+if [ -n "$functional" ]; then
+    if [ ! -f "$MARKER" ]; then
+        refuse "functional files are staged and the full suite never passed here" \
+            "$functional" "run: make green"
+    else
+        stale=$(printf '%s\n' "$functional" | while IFS= read -r file; do
+            [ -f "$file" ] || continue
+            if [ -n "$(find "$file" -newer "$MARKER" 2>/dev/null)" ]; then
+                printf '%s\n' "$file"
+            fi
+        done)
+        if [ -n "$stale" ]; then
+            refuse "these staged files are newer than the full suite marker" \
+                "$stale" "run: make green again"
+        fi
+    fi
+fi
+
+if [ "$status" -ne 0 ]; then
+    printf 'pre-commit: commit blocked. Fix the above rather than passing --no-verify.\n' >&2
+fi
+
+exit "$status"

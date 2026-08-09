@@ -1,0 +1,107 @@
+{
+  "realm": "tessera-rotating",
+  "enabled": true,
+  "displayName": "tessera test realm (refresh rotation ON)",
+  "sslRequired": "none",
+  "bruteForceProtected": false,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "accessTokenLifespan": 60,
+  "ssoSessionIdleTimeout": 300,
+  "ssoSessionMaxLifespan": 3600,
+  "offlineSessionIdleTimeout": 3600,
+  "clients": [
+    {
+      "clientId": "tessera-pkce-required",
+      "name": "tessera test client (PKCE enforced)",
+      "description": "Confidential client that requires PKCE S256 on the authorization-code flow.",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "test-only-not-a-secret",
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8000/services/tessera/callback",
+        "http://127.0.0.1:8000/services/tessera/callback"
+      ],
+      "webOrigins": ["http://localhost:8000", "http://127.0.0.1:8000"],
+      "defaultClientScopes": ["profile", "email"],
+      "optionalClientScopes": ["offline_access"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "tessera-pkce-optional",
+      "name": "tessera test client (PKCE optional)",
+      "description": "Confidential client that accepts but does not require PKCE.",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "test-only-not-a-secret",
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8000/services/tessera/callback",
+        "http://127.0.0.1:8000/services/tessera/callback"
+      ],
+      "webOrigins": ["http://localhost:8000", "http://127.0.0.1:8000"],
+      "defaultClientScopes": ["profile", "email"],
+      "optionalClientScopes": ["offline_access"]
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "email": "alice@example.com",
+      "firstName": "Alice",
+      "lastName": "Example",
+      "enabled": true,
+      "emailVerified": true,
+      "realmRoles": ["default-roles-tessera-rotating"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "alice-test-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "bob",
+      "email": "bob@example.com",
+      "firstName": "Bob",
+      "lastName": "Example",
+      "enabled": true,
+      "emailVerified": true,
+      "realmRoles": ["default-roles-tessera-rotating"],
+      "credentials": [
+        { "type": "password", "value": "bob-test-password", "temporary": false }
+      ]
+    },
+    {
+      "username": "tessera-admin",
+      "email": "tessera-admin@example.com",
+      "firstName": "Tessera",
+      "lastName": "Admin",
+      "enabled": true,
+      "emailVerified": true,
+      "realmRoles": ["default-roles-tessera-rotating"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin-test-password",
+          "temporary": false
+        }
+      ],
+      "clientRoles": {
+        "realm-management": ["realm-admin"]
+      }
+    }
+  ]
+}

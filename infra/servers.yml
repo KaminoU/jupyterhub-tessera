@@ -1,0 +1,53 @@
+# tessera configuration for the local Keycloak bench (infra/docker-compose.yml).
+#
+# Everything in this file is a public test fixture. The client secret and the
+# store key are injected as obvious dummy values by infra/jupyterhub_config.py;
+# the realms, clients, and scopes match the declarative Keycloak import.
+#
+# The three servers cover the typology axes against the two realms:
+#   - discovery vs explicit endpoints        (stable-discovery vs stable-explicit)
+#   - offline vs session refresh tokens      (offline_access present or not)
+#   - stable vs rotating refresh tokens      (realm-level setting)
+# Rotation is a realm setting, orthogonal to the endpoint mode, so the fourth
+# combination would exercise nothing new.
+
+# JupyterHub's default bind: the realms register
+# http://localhost:8000/services/tessera/callback as redirect URI.
+service:
+  public_url: http://localhost:8000
+
+# Bench store: relative db (created in the service cwd, gitignored via *.db),
+# key held outside the database, injected by the Hub config.
+store:
+  db_location: ./tessera-bench.db
+  key_env: TESSERA_DB_KEY
+
+servers:
+
+  stable-discovery:                 # OIDC discovery, offline refresh token
+    provider:
+      issuer: http://localhost:8008/realms/tessera-stable
+    client_id: tessera-pkce-required
+    client_secret_env: TESSERA_CLIENT_SECRET
+    scopes: [openid, profile, offline_access]
+    button:
+      label: "Stable (discovery)"
+
+  stable-explicit:                  # explicit endpoints, session refresh token
+    provider:
+      authorization_endpoint: http://localhost:8008/realms/tessera-stable/protocol/openid-connect/auth
+      token_endpoint: http://localhost:8008/realms/tessera-stable/protocol/openid-connect/token
+    client_id: tessera-pkce-optional
+    client_secret_env: TESSERA_CLIENT_SECRET
+    scopes: [openid, profile]       # no offline_access: session-bound refresh token
+    button:
+      label: "Stable (explicit)"
+
+  rotating:                         # rotation and reuse detection realm
+    provider:
+      issuer: http://localhost:8008/realms/tessera-rotating
+    client_id: tessera-pkce-required
+    client_secret_env: TESSERA_CLIENT_SECRET
+    scopes: [openid, profile, offline_access]
+    button:
+      label: "Rotating"

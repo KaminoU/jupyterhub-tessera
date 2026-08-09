@@ -1,0 +1,95 @@
+{
+  "name": "tessera",
+  "version": "1.0.0-rc.1",
+  "description": "JupyterHub/JupyterLab plugin to acquire and securely store OAuth2/OIDC tokens, with a per-server status button.",
+  "keywords": [
+    "jupyter",
+    "jupyterlab",
+    "jupyterlab-extension",
+    "jupyterhub",
+    "oauth2",
+    "oidc"
+  ],
+  "homepage": "https://github.com/KaminoU/jupyterhub-tessera",
+  "bugs": {
+    "url": "https://github.com/KaminoU/jupyterhub-tessera/issues"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Michel TRUONG"
+  },
+  "files": [
+    "lib/**/*.{d.ts,eot,gif,html,jpg,js,js.map,json,png,svg,woff2,ttf}",
+    "style/**/*.{css,js,eot,gif,html,jpg,json,png,svg,woff2,ttf}",
+    "frontend/src/**/*.{ts,tsx}"
+  ],
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "style": "style/index.css",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KaminoU/jupyterhub-tessera.git"
+  },
+  "scripts": {
+    "build": "npm run build:lib && npm run build:labextension:dev",
+    "build:prod": "npm run clean && npm run build:lib:prod && npm run build:labextension",
+    "build:lib": "tsc --sourceMap",
+    "build:lib:prod": "tsc",
+    "build:labextension": "jupyter labextension build .",
+    "build:labextension:dev": "jupyter labextension build --development True .",
+    "clean": "npm run clean:lib",
+    "clean:lib": "rimraf lib tsconfig.tsbuildinfo",
+    "clean:labextension": "rimraf src/tessera/labextension",
+    "clean:all": "npm run clean:lib && npm run clean:labextension",
+    "eslint": "eslint . --fix",
+    "eslint:check": "eslint .",
+    "prettier": "prettier --write \"**/*.{ts,tsx,css,json,md}\"",
+    "prettier:check": "prettier --check \"**/*.{ts,tsx,css,json,md}\"",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@jupyterlab/application": "^4.0.0",
+    "@jupyterlab/apputils": "^4.0.0",
+    "@jupyterlab/coreutils": "^6.0.0",
+    "@jupyterlab/ui-components": "^4.0.0",
+    "@lumino/widgets": "^2.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@jupyterlab/builder": "^4.0.0",
+    "@testing-library/react": "^16.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^6.0.3",
+    "@vitest/coverage-v8": "^4.1.9",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^9.1.0",
+    "jsdom": "^25.0.0",
+    "prettier": "^3.3.0",
+    "rimraf": "^5.0.0",
+    "typescript": "~5.5.4",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^4.1.9"
+  },
+  "sideEffects": [
+    "style/*.css",
+    "style/index.js"
+  ],
+  "styleModule": "style/index.js",
+  "publishConfig": {
+    "access": "public"
+  },
+  "jupyterlab": {
+    "extension": true,
+    "outputDir": "src/tessera/labextension"
+  },
+  "prettier": {
+    "singleQuote": true,
+    "trailingComma": "none",
+    "arrowParens": "avoid",
+    "endOfLine": "lf"
+  }
+}

@@ -1,0 +1,179 @@
+[build-system]
+requires = ["hatchling>=1.21.0", "hatch-jupyter-builder>=0.9.1", "jupyterlab>=4.0.0,<5"]
+build-backend = "hatchling.build"
+
+[project]
+name = "jupyterhub-tessera"
+dynamic = ["version"]
+description = "JupyterHub/JupyterLab plugin to acquire and securely store OAuth2/OIDC tokens, with a per-server status button."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+authors = [{ name = "Michel TRUONG" }]
+maintainers = [{ name = "Michel TRUONG" }]
+keywords = [
+    "jupyter",
+    "jupyterlab",
+    "jupyterhub",
+    "oauth2",
+    "oidc",
+    "token",
+    "refresh-token",
+    "access-token",
+    "sso",
+    "pkce",
+    "token-storage",
+    "jupyterhub-service",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Jupyter",
+    "Framework :: Jupyter :: JupyterLab",
+    "Framework :: Jupyter :: JupyterLab :: 4",
+    "Framework :: Jupyter :: JupyterLab :: Extensions",
+    "Framework :: Jupyter :: JupyterLab :: Extensions :: Prebuilt",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
+dependencies = [
+    # The kernel-side client (tessera.kernel) calls the service over HTTP.
+    "httpx>=0.28,<1",
+    "jupyterhub>=4,<6",
+    # Config loading (cascade, SOPS, safe parsing), OAuth2/OIDC and SSL foundation.
+    # The db-crypto extra pulls sqlcipher3 for the encrypted token store (kstlib.db).
+    "kstlib[db-crypto]>=3.6.2,<4",
+    # Malformed-YAML errors are wrapped into tessera ConfigFileError (config.loader).
+    "pyyaml>=6,<7",
+    "rich>=13",
+    "tornado>=6.4",
+    "typer>=0.12",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.6",
+    "mypy>=1.10",
+    "types-PyYAML>=6,<7",
+    "pytest>=8",
+    "pytest-cov>=5",
+    "pytest-asyncio>=0.23",
+    "jupyterlab>=4.0.0,<5",
+]
+docs = [
+    "sphinx>=8.1,<9",
+    "furo>=2025.9,<2026",
+    "myst-parser>=4.0,<5",
+    "sphinx-togglebutton>=0.3,<1",
+    "sphinx-design>=0.6,<0.7",
+    # Security: transitive lower bound (Pygments ReDoS advisory, pulled via sphinx).
+    "Pygments>=2.20.0",
+    # myst-parser 4.x requires markdown-it-py~=3.0; keep <4 until supported upstream.
+    "markdown-it-py>=3,<4",
+]
+tox = [
+    "tox>=4.31,<5",
+    "tox-uv>=1.35,<2",
+]
+
+[project.scripts]
+tessera = "tessera.cli.main:main"
+
+[project.urls]
+Homepage = "https://github.com/KaminoU/jupyterhub-tessera"
+Repository = "https://github.com/KaminoU/jupyterhub-tessera"
+Issues = "https://github.com/KaminoU/jupyterhub-tessera/issues"
+Changelog = "https://github.com/KaminoU/jupyterhub-tessera/blob/main/CHANGELOG.md"
+
+[tool.hatch.version]
+path = "src/tessera/meta.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tessera"]
+
+[tool.hatch.build.targets.wheel.shared-data]
+"src/tessera/labextension" = "share/jupyter/labextensions/tessera"
+"install.json" = "share/jupyter/labextensions/tessera/install.json"
+
+[tool.hatch.build.targets.sdist]
+artifacts = ["src/tessera/labextension"]
+exclude = [".github", "frontend/node_modules"]
+
+[tool.hatch.build.hooks.jupyter-builder]
+dependencies = ["hatch-jupyter-builder>=0.9.1"]
+build-function = "hatch_jupyter_builder.npm_builder"
+ensured-targets = [
+    "src/tessera/labextension/static/style.js",
+    "src/tessera/labextension/package.json",
+]
+skip-if-exists = ["src/tessera/labextension/static/style.js"]
+
+[tool.hatch.build.hooks.jupyter-builder.build-kwargs]
+build_cmd = "build:prod"
+npm = ["npm"]
+
+[tool.hatch.build.hooks.jupyter-builder.editable-build-kwargs]
+build_cmd = "build"
+npm = ["npm"]
+source_dir = "frontend/src"
+build_dir = "src/tessera/labextension"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.format]
+line-ending = "lf"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C901", "ANN", "PTH", "SIM"]
+
+[tool.ruff.lint.flake8-bugbear]
+# typer.Option / typer.Argument are called in argument defaults by design.
+extend-immutable-calls = ["typer.Option", "typer.Argument"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+mypy_path = ["src", "tests/service", "tests/e2e"]
+files = ["src/tessera", "tests"]
+
+[[tool.mypy.overrides]]
+# jupyterhub ships no py.typed marker, so its modules import as untyped.
+module = ["jupyterhub.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# The service handlers must subclass the (untyped) jupyterhub auth mixins.
+module = ["tessera.service.*"]
+disallow_subclassing_any = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+markers = [
+    "e2e: end-to-end tests against the live local bench (opt-in, real sleeps)",
+    "stress: stress/RSS bench against the live local bench (opt-in, real sleeps)",
+]
+# The e2e and stress tiers are opt-in: run them with `pytest -m e2e` or
+# `pytest -m stress` (required even for a single node id, since this filter
+# is applied first).
+addopts = '-m "not e2e and not stress"'
+
+[tool.coverage.run]
+source = ["tessera"]
+branch = true
+
+[tool.coverage.report]
+exclude_also = [
+    # Script entry guards are exercised via `python -m`, not the test run.
+    "if __name__ == .__main__.:",
+]

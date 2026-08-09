@@ -1,0 +1,48 @@
+# tessera .gitignore
+# Pattern: ignore every root dot-entry, then re-allow the few that MUST be tracked.
+/.*
+!/.gitignore
+!/.gitattributes
+!/.github
+!/.readthedocs.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+htmlcov/
+
+# Node / TypeScript / JupyterLab extension build artifacts
+node_modules/
+lib/
+src/tessera/labextension/
+coverage/
+*.tsbuildinfo
+*.tgz
+npm-debug.log*
+yarn-error.log*
+
+# Token store + any local data MUST NEVER be committed
+*.db
+*.sqlite
+*.sqlite3
+
+# Secrets: keys, certs, dotenv (root .env already caught by /.* above)
+*.key
+*.pem
+.env
+
+# Local full-suite marker (never versioned; needed because /.github is re-allowed above)
+.github/.tests-passed
+
+# Assets: PNG are unreferenced local exports (SVG are the tracked sources),
+# except documentation captures referenced by the README: a screenshot has no
+# vector source, so it is tracked as it is.
+assets/*.png
+!assets/poc-viya.png
+
+# OS / editor noise
+.DS_Store
+Thumbs.db

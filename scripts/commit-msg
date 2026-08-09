@@ -1,0 +1,71 @@
+#!/bin/sh
+#
+# tessera commit-msg hook. Install it with `make hook`.
+#
+# The message is written after the pre-commit hook has run, so it is invisible
+# to it. The message rules therefore live here.
+#
+# This file ships in a public repository, so it carries generic rules only.
+# Strings specific to one deployment belong in the untracked local file read
+# at the end.
+
+set -u
+
+MSG_FILE=$1
+# Same list as the pre-commit hook, see its header for the format.
+PATTERNS_FILE="${TESSERA_LOCAL_PATTERNS:-.tessera-patterns.local}"
+EM_DASH=$(printf '\342\200\224')
+
+status=0
+
+refuse() {
+    printf 'commit-msg: REFUSED, %s\n' "$1" >&2
+    if [ -n "${2:-}" ]; then
+        printf '  fix: %s\n' "$2" >&2
+    fi
+    status=1
+    return 0
+}
+
+# Git strips comment lines before storing the message, so ignore them here.
+message=$(grep -v '^#' "$MSG_FILE")
+subject=$(printf '%s\n' "$message" | grep -v '^[[:space:]]*$' | head -1)
+
+if printf '%s\n' "$message" | grep -q "$EM_DASH"; then
+    refuse "the message contains an em dash" "use a comma, a colon, or two sentences"
+fi
+
+if printf '%s\n' "$message" | grep -qi 'co-authored-by:'; then
+    refuse "the message carries a Co-Authored-By trailer" \
+        "the message describes the change, and nothing else"
+fi
+
+if printf '%s\n' "$message" | grep -qi 'generated with'; then
+    refuse "the message carries a tool signature" \
+        "the message describes the change, and nothing else"
+fi
+
+if printf '%s\n' "$subject" | LC_ALL=C grep -q '^[^ -~]'; then
+    refuse "the subject starts with a non ASCII character" \
+        "start with the change itself, no decorative prefix"
+fi
+
+# The patterns are folded into one alternation rather than passed as a pattern
+# file: a temporary file is not writable everywhere, and a check that skips
+# itself when it cannot write is worse than no check at all. Blank lines and
+# comments are dropped (a blank pattern matches every line) and carriage
+# returns are stripped so a file saved on Windows still matches.
+if [ -f "$PATTERNS_FILE" ]; then
+    patterns=$(grep -Ev '^[[:space:]]*(#|$)' "$PATTERNS_FILE" 2>/dev/null |
+        tr -d '\r' | tr '\n' '|' | sed 's/|$//')
+    if [ -n "$patterns" ] && printf '%s\n' "$message" | grep -Eiq -- "$patterns"; then
+        refuse "a local confidential pattern matched the message" \
+            "rewrite it generically, this repository is public"
+    fi
+fi
+
+if [ "$status" -ne 0 ]; then
+    printf 'commit-msg: commit blocked. Fix the message rather than passing --no-verify.\n' >&2
+fi
+
+exit "$status"

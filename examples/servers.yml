@@ -1,0 +1,33 @@
+# Public base URL of the Hub. The OAuth callback URL is derived from it
+# (<public_url>/services/tessera/callback) and must be registered as the
+# redirect URI at every provider below.
+service:
+  public_url: https://hub.example.com
+
+# Encrypted token store: where refresh tokens live and how the SQLCipher db is keyed.
+store:
+  db_location: /var/lib/tessera/tokens.db
+  key_file: /etc/tessera/keys/db.key     # key file, kept at mode 0400
+
+servers:
+
+  demo-oidc:                        # discovery mode (OIDC .well-known)
+    provider:
+      issuer: https://idp.example.com/realms/demo
+    client_id: tessera-demo-client
+    client_secret_env: TESSERA_DEMO_OIDC_SECRET
+    scopes: [openid, profile, offline_access]
+    button:
+      label: "Demo IDP"
+      color_valid: "#2e7d32"
+      color_invalid: "#c62828"
+    auto_refresh: true
+
+  demo-explicit:                    # explicit endpoints (no discovery)
+    provider:
+      authorization_endpoint: https://auth.example.org/oauth2/authorize
+      token_endpoint: https://auth.example.org/oauth2/token
+    client_id: tessera-explicit-client
+    client_secret_file: /etc/tessera/secrets/demo-explicit.secret
+    scopes: [openid]
+    auto_refresh: false

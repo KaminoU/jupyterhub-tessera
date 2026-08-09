@@ -1,0 +1,137 @@
+/* tessera JupyterLab extension styles. */
+
+.tessera-Panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  color: var(--jp-ui-font-color1);
+  font-size: var(--jp-ui-font-size1);
+}
+
+.tessera-Panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: var(--jp-border-width) solid var(--jp-border-color2);
+}
+
+.tessera-Panel-title {
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.tessera-Panel-message {
+  margin: 0;
+  color: var(--jp-ui-font-color2);
+}
+
+.tessera-Panel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tessera-ServerItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 2px;
+}
+
+.tessera-ServerItem-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tessera-ServerItem-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--tessera-dot, var(--jp-layout-color3));
+}
+
+.tessera-ServerItem-label {
+  flex: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tessera-ServerItem-signin {
+  flex: none;
+  cursor: pointer;
+  border: var(--jp-border-width) solid var(--jp-border-color1);
+  border-radius: 2px;
+  background: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color1);
+  font-size: var(--jp-ui-font-size0);
+  padding: 2px 8px;
+}
+
+.tessera-ServerItem-signin:hover {
+  background: var(--jp-layout-color2);
+}
+
+.tessera-Panel-version {
+  margin-left: auto;
+  color: var(--jp-ui-font-color3);
+  font-size: var(--jp-ui-font-size0);
+}
+
+.tessera-ServerItem-actions {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+
+.tessera-ServerItem-action {
+  cursor: pointer;
+  border: none;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--jp-ui-font-color1);
+  font-size: var(--jp-ui-font-size1);
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.tessera-ServerItem-action:hover:enabled {
+  background: var(--jp-layout-color2);
+  color: var(--jp-ui-font-color0);
+}
+
+.tessera-ServerItem-action:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.tessera-ServerItem-action-danger {
+  margin-left: 8px;
+}
+
+.tessera-ServerDetails {
+  display: grid;
+  grid-template-columns: max-content auto;
+  gap: 2px 12px;
+  margin: 0 0 4px 18px;
+  color: var(--jp-ui-font-color2);
+  font-size: var(--jp-ui-font-size0);
+}
+
+.tessera-ServerDetails dt {
+  font-weight: 600;
+}
+
+.tessera-ServerDetails dd {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

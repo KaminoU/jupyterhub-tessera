@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Deployment guide and troubleshooting
+    url: https://github.com/KaminoU/jupyterhub-tessera/blob/main/docs/source/guide/deployment.md
+    about: Install, configure, and verify a deployment. Most 403 and callback failures are answered here.
+  - name: Contributing guide
+    url: https://github.com/KaminoU/jupyterhub-tessera/blob/main/CONTRIBUTING.md
+    about: What the service contract allows, who owns RBAC in a deployment, and the bar a change has to clear.

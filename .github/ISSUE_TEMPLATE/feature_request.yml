@@ -1,0 +1,42 @@
+name: Feature request
+description: Suggest a capability or a change of behavior
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        tessera is a JupyterHub service, and that shapes what a feature can be. The
+        [contributing guide](https://github.com/KaminoU/jupyterhub-tessera/blob/main/CONTRIBUTING.md)
+        states the contract: the frontend consumes a boolean status and never a token,
+        and running without a Hub is not a mode waiting to be written.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What can you not do today? Describe the situation you are stuck in, not the solution you have in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What should happen instead, and who would use it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you tried and why they fall short. Write `none` if you have not looked at any.
+
+  - type: checkboxes
+    id: contract
+    attributes:
+      label: Service contract
+      options:
+        - label: "This stays within the service contract: no token in the browser, and no Hub-less mode."
+          required: true
