@@ -8,4 +8,4 @@
  * the release checklist, so the displayed value also diagnoses the
  * service: a mismatch on the bench means a stale installed wheel.
  */
-export const PANEL_VERSION = '1.0.0-rc.1';
+export const PANEL_VERSION = '1.0.0';

@@ -1,6 +1,6 @@
 {
   "name": "tessera",
-  "version": "1.0.0-rc.1",
+  "version": "1.0.0",
   "description": "JupyterHub/JupyterLab plugin to acquire and securely store OAuth2/OIDC tokens, with a per-server status button.",
   "keywords": [
     "jupyter",

@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-08-10
+
 ### Added
 
 - Service observability: a greppable `[TESSERA ...]` log format on the
@@ -69,4 +71,5 @@ and this project adheres to
   per credential and wired in the bench configuration; the panel points
   at the right directive when the grant is missing.
 
-[Unreleased]: https://github.com/KaminoU/jupyterhub-tessera/commits/main
+[Unreleased]: https://github.com/KaminoU/jupyterhub-tessera/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/KaminoU/jupyterhub-tessera/releases/tag/v1.0.0

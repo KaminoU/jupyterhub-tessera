@@ -7,6 +7,8 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/KaminoU/jupyterhub-tessera/actions/workflows/ci.yml"><img src="https://github.com/KaminoU/jupyterhub-tessera/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://jupyterhub-tessera.readthedocs.io/"><img src="https://img.shields.io/badge/docs-RTD-blue" alt="Documentation"></a>
   <a href="https://pypi.org/project/jupyterhub-tessera/"><img src="https://img.shields.io/pypi/v/jupyterhub-tessera?color=blue" alt="PyPI"></a>
   <img src="https://img.shields.io/badge/python-≥3.10-blue" alt="Python">
   <a href="https://github.com/KaminoU/jupyterhub-tessera/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
@@ -29,6 +31,12 @@ tessera is generic: any OAuth2/OIDC provider is a configuration entry.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/KaminoU/jupyterhub-tessera/main/assets/poc-viya.png" alt="The tessera panel in JupyterLab: one button per declared server, green when a valid refresh token is stored, with token details on demand" width="720">
+</p>
+
+<p align="center">
+  <em>Signed in on 6 August, still green on 10 August: the access token expired
+  several times in between, and each one was renewed from the stored refresh
+  token, on demand.</em>
 </p>
 
 ## How it works
