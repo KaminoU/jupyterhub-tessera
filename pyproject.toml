@@ -51,7 +51,7 @@ dependencies = [
     "jupyterhub>=4,<6",
     # Config loading (cascade, SOPS, safe parsing), OAuth2/OIDC and SSL foundation.
     # The db-crypto extra pulls sqlcipher3 for the encrypted token store (kstlib.db).
-    "kstlib[db-crypto]>=3.6.2,<4",
+    "kstlib[db-crypto]>=3.7.1,<4",
     # Malformed-YAML errors are wrapped into tessera ConfigFileError (config.loader).
     "pyyaml>=6,<7",
     "rich>=13",
@@ -68,6 +68,10 @@ dev = [
     "pytest-cov>=5",
     "pytest-asyncio>=0.23",
     "jupyterlab>=4.0.0,<5",
+    # The declared-dependency check parses this file. tomllib is stdlib from
+    # 3.11 on, so only the supported floor needs the backport. Declared rather
+    # than borrowed from a transitive: that is the rule the check enforces.
+    "tomli>=2; python_version < '3.11'",
 ]
 docs = [
     "sphinx>=8.1,<9",
@@ -130,7 +134,7 @@ build_dir = "src/tessera/labextension"
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-src = ["src", "tests"]
+src = ["src", "tests", "scripts"]
 
 [tool.ruff.format]
 line-ending = "lf"
@@ -146,7 +150,7 @@ extend-immutable-calls = ["typer.Option", "typer.Argument"]
 python_version = "3.10"
 strict = true
 mypy_path = ["src", "tests/service", "tests/e2e"]
-files = ["src/tessera", "tests"]
+files = ["src/tessera", "tests", "scripts"]
 
 [[tool.mypy.overrides]]
 # jupyterhub ships no py.typed marker, so its modules import as untyped.
@@ -160,7 +164,8 @@ disallow_subclassing_any = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+# scripts/ holds repository tooling that is tested but never shipped.
+pythonpath = ["src", "scripts"]
 asyncio_mode = "auto"
 markers = [
     "e2e: end-to-end tests against the live local bench (opt-in, real sleeps)",
@@ -172,7 +177,8 @@ markers = [
 addopts = '-m "not e2e and not stress"'
 
 [tool.coverage.run]
-source = ["tessera"]
+# scripts/ is repository tooling: never shipped, held to the same floor.
+source = ["tessera", "scripts"]
 branch = true
 
 [tool.coverage.report]

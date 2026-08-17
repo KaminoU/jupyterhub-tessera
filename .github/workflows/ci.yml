@@ -136,14 +136,23 @@ jobs:
         run: uv sync --extra dev
 
       - name: Run Ruff linter
-        run: uv run ruff check src tests infra --output-format=github
+        run: uv run ruff check src tests infra scripts --output-format=github
 
       - name: Run Ruff formatter check
-        run: uv run ruff format --check src tests infra
+        run: uv run ruff format --check src tests infra scripts
 
       # The checked paths come from the mypy config in pyproject.toml.
       - name: Run mypy
         run: uv run mypy
+
+      # Same file the pre-commit hook runs, called differently on purpose. The
+      # hook guards itself because it runs in an environment nobody controls;
+      # here the install step above has just built one, so uv run creates
+      # nothing unexpected and the check must always run and fail hard. A
+      # guard copied from the hook would silence it precisely where it is the
+      # authority, since this job never sets UV_PROJECT_ENVIRONMENT.
+      - name: Check declared dependencies
+        run: uv run python scripts/check_declared_deps.py
 
   # ===========================================================================
   # Test matrix - the tox default environment, one job per Python version
@@ -189,6 +198,7 @@ jobs:
           uv run pytest tests/
           --color=yes
           --cov=tessera
+          --cov=scripts
           --cov-report=term-missing
           --cov-fail-under=95
           --tb=short
@@ -295,6 +305,66 @@ jobs:
           path: dist/
 
   # ===========================================================================
+  # Clean install - the wheel must import with its declared dependencies alone
+  #
+  # Every other job here installs the dev extra, and installs it from the lock,
+  # so none of them can see a module that is imported but never declared: they
+  # all pull it in through something else. This job is the only one that
+  # resolves afresh, from the artifact that publish will send.
+  #
+  # Every supported version, aligned on the test matrix above. Which version
+  # breaks under a phantom dependency is not a property of this package: it
+  # follows the version markers of whichever third party happens to supply the
+  # missing module. Those markers differ from one provider to the next and move
+  # without notice, and when several packages supply the same module under
+  # different bounds, the union of their ranges can leave a hole anywhere in
+  # the middle, invisible from either end. Testing the ends tests the ends.
+  # ===========================================================================
+  clean-install:
+    name: Clean install (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    needs: [build]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
+
+    steps:
+      # The checkout brings the check, the artifact brings what gets shipped.
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download the distributions
+        uses: actions/download-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+      # A virgin environment, the wheel, and nothing else. Never uv sync, which
+      # would bring the lock and the dev extra straight back in. And never a
+      # cache here, neither of this environment nor of a tox workdir: uv pip
+      # install is additive and never prunes, so a reused environment would
+      # keep a dependency that has since been REMOVED, and this job would go
+      # green on exactly the mistake it exists to catch. Its honesty rests on
+      # the runner being new.
+      - name: Install the wheel, declared dependencies only
+        run: |
+          uv venv --python ${{ matrix.python-version }}
+          uv pip install dist/*.whl
+
+      # The venv interpreter directly, so no uv subcommand can reach for the
+      # project and reintroduce what was just excluded. The check refuses a
+      # package resolved from the checkout, so the src/ tree sitting right
+      # there cannot stand in for the installation.
+      - name: Import every module of the installed package
+        run: .venv/bin/python scripts/check_clean_install.py
+
+  # ===========================================================================
   # Version check - the tag must match every version declared in the tree
   # ===========================================================================
   version-check:
@@ -346,7 +416,8 @@ jobs:
   publish:
     name: Publish to PyPI
     runs-on: ubuntu-latest
-    needs: [lock-check, frontend, lint, test, doctest, docs, build, version-check]
+    needs:
+      [lock-check, frontend, lint, test, doctest, docs, build, clean-install, version-check]
     if: startsWith(github.ref, 'refs/tags/v')
 
     environment:

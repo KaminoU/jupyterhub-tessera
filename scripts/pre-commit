@@ -173,6 +173,77 @@ else
     printf 'pre-commit: uv not found, lock check skipped (the CI job is the authority)\n'
 fi
 
+# --- Declared dependencies -------------------------------------------------
+#
+# The check itself is scripts/check_declared_deps.py, and the CI runs the very
+# same file. Only the way it is invoked differs, deliberately.
+#
+# This hook runs in an environment nobody controls, so it never calls uv at
+# all: it resolves an interpreter itself and runs the check with that. Asked
+# to run something, uv builds an environment when none is there, silently and
+# empty, either inside the repository or at whatever path the variable names;
+# the check would then find no distribution and refuse every commit on a fresh
+# clone. Holding that off with a condition worked only for as long as nobody
+# relaxed the condition. Not calling uv removes the hazard instead of watching
+# it, so do not reintroduce a `uv run` here. The CI needs no such care: its
+# job builds the environment first, and a check that can skip itself where it
+# is authoritative is not a check. Do not unify the two call sites.
+#
+# Both layouts are accepted, because both are legitimate: the environment
+# named by UV_PROJECT_ENVIRONMENT, which is how a synced working tree keeps
+# its environment out of the repository, and the .venv uv creates by default.
+# Accepting only the first made this guard skip forever for anyone who had not
+# adopted that local convention.
+project_python() {
+    for candidate_base in "${UV_PROJECT_ENVIRONMENT:-}" .venv; do
+        [ -n "$candidate_base" ] || continue
+        for candidate_python in "$candidate_base/bin/python" \
+            "$candidate_base/Scripts/python.exe"; do
+            if [ -x "$candidate_python" ]; then
+                printf '%s\n' "$candidate_python"
+                return 0
+            fi
+        done
+    done
+    return 1
+}
+
+# An interpreter alone is not enough, and skipping here is not laziness. The
+# check resolves an import root to a distribution through the installed
+# environment, and that index only tells the truth once the project's own
+# dependency graph is installed. In a bare environment every root whose name
+# matches its distribution still resolves, so the gap is silent, except for
+# `yaml`: it is shipped by pyyaml, so it would be reported as undeclared while
+# pyproject.toml declares pyyaml plainly. A refusal that lies is worse than a
+# skip, and the documented path goes straight through that state, between
+# creating an environment and installing into it.
+#
+# The TOML reader is probed for the same reason: the check imports tomli below
+# 3.11, which only the dev extra declares, and an ImportError would surface as
+# a refusal about something else entirely.
+USABLE_PROBE='import sys, importlib.metadata as m
+m.version("jupyterhub-tessera")
+__import__("tomllib" if sys.version_info >= (3, 11) else "tomli")'
+
+# Whole-tree analysis, so it only runs when the staged files could change its
+# answer: the sources it reads, or the file declaring the dependencies. That
+# list is binding. Should the check ever read another path, add it here too,
+# or this filter turns the whole thing silent without saying so.
+if printf '%s\n' "$staged" | grep -Eq '^src/tessera/.*\.py$|^pyproject\.toml$'; then
+    interpreter=$(project_python || true)
+    if [ -z "$interpreter" ]; then
+        printf 'pre-commit: no project environment (UV_PROJECT_ENVIRONMENT unset'
+        printf ' or pointing nowhere, and no .venv here), declared-dependency'
+        printf ' check skipped (the CI job is the authority)\n'
+    elif ! "$interpreter" -c "$USABLE_PROBE" >/dev/null 2>&1; then
+        printf 'pre-commit: %s cannot answer this check (the project is not' "$interpreter"
+        printf ' installed there, or its TOML reader is missing),'
+        printf ' declared-dependency check skipped (the CI job is the authority)\n'
+    elif ! report=$("$interpreter" scripts/check_declared_deps.py 2>&1); then
+        refuse "the declared-dependency check failed" "$report"
+    fi
+fi
+
 # --- The full suite marker -------------------------------------------------
 #
 # This hook never runs the suites: it only refuses to believe they passed.

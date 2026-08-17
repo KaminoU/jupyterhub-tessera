@@ -39,7 +39,7 @@ WSL2, with the [Keycloak test container](infra/keycloak.md) shipped in
 # Python, single environment (fast smoke run with coverage)
 tox -e py310
 
-# Python, full matrix (py310 to py314, lint, doctest, docs)
+# Python, full matrix (py310 to py314, lint, doctest, docs, clean install)
 make tox
 
 # TypeScript chain (typecheck, lint, format check, tests, build)

@@ -8,6 +8,24 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- A pre-commit and CI check now compares the import roots of src/tessera
+  against the declared dependencies. A second check installs the built
+  distribution with its declared dependencies only and imports every
+  module it ships, run locally through tox on every supported Python
+  version and in CI against the artifact that gets published.
+
+### Changed
+
+- kstlib floor raised to 3.7.1. Versions up to 3.7.0 imported
+  typing_extensions at module level without declaring it, which made them
+  unimportable on Python 3.13+ from a clean install. tessera was never
+  affected: JupyterHub declares typing_extensions unconditionally through
+  alembic, pydantic and sqlalchemy, so the module was always present. The
+  floor moves so the guarantee comes from our own constraint rather than
+  from a transitive one we do not control.
+
 ## [1.0.0] - 2026-08-10
 
 ### Added

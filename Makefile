@@ -6,7 +6,7 @@
 
 help:
 	@echo "Development targets:"
-	@echo "  tox        -> Run the full Python matrix (py310-py314, lint, doctest, docs)"
+	@echo "  tox        -> Run the full Python matrix (py310-py314, lint, doctest, docs, clean install)"
 	@echo "  tox-clean  -> Clean local caches and recreate the tox environments"
 	@echo "  ts         -> Run the full TypeScript chain (typecheck, lint, format, tests, build)"
 	@echo "  green      -> Run tox + ts, then create the local full-suite marker on success"

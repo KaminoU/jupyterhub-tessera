@@ -68,10 +68,13 @@ One command runs the whole thing:
 $ make green
 ```
 
-It runs the full Python matrix (py310 to py314, plus lint, doctest and the
-documentation build), then the complete TypeScript chain (typecheck, lint,
-format check, tests with coverage, production build). It is the gate: a run in
-a single environment is a smoke test, not a validation.
+It runs the full Python matrix (py310 to py314, plus lint, doctest, the
+documentation build, and a clean install on each of the five versions), then
+the complete TypeScript chain (typecheck, lint, format check, tests with
+coverage, production build). A clean install rebuilds the environment from
+scratch and imports every module the package ships on its declared
+dependencies alone. It is the gate: a run in a single environment is a smoke
+test, not a validation.
 
 While iterating you can run one side at a time with `make tox` or `make ts`,
 and `make tox-clean` recreates the tox environments when a cache goes bad. On
