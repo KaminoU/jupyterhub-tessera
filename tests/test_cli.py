@@ -257,7 +257,13 @@ _DISCOVERY_RICH = {
 }
 
 
-def _write_doctor_config(target: Path, *, discovery: bool = True, issuer: str = _ISSUER) -> None:
+def _write_doctor_config(
+    target: Path,
+    *,
+    discovery: bool = True,
+    issuer: str = _ISSUER,
+    public_url: str = "https://hub.example.org",
+) -> None:
     """Write a valid single-server configuration for the doctor tests."""
     provider: dict[str, str] = {"issuer": issuer} if discovery else dict(_DISCOVERY_OK)
     data: dict[str, object] = {
@@ -270,7 +276,7 @@ def _write_doctor_config(target: Path, *, discovery: bool = True, issuer: str = 
             }
         },
         "store": {"db_location": "/var/lib/tessera/tokens.db", "key_env": "DOCTOR_DB_KEY"},
-        "service": {"public_url": "https://hub.example.org"},
+        "service": {"public_url": public_url},
     }
     target.write_text(yaml.safe_dump(data), encoding="utf-8")
 
@@ -306,6 +312,20 @@ def test_doctor_missing_config_is_graceful(tmp_path: Path) -> None:
     result = runner.invoke(app, ["doctor", "--config", str(target)])
     assert result.exit_code != 0
     assert "cannot read configuration" in result.output
+
+
+def test_doctor_refuses_a_public_url_that_is_not_a_url(tmp_path: Path) -> None:
+    """A ``public_url`` carrying an unexpanded shell variable is refused, not reported ok.
+
+    ``--summary`` restricts the run to the rows read from the configuration, so
+    the non-zero exit can only come from the configuration itself.
+    """
+    target = tmp_path / "servers.yml"
+    _write_doctor_config(target, public_url="https://$\\{SRV\\}:9999")
+    result = runner.invoke(app, ["doctor", "--offline", "--summary", "--config", str(target)])
+    assert result.exit_code != 0, result.output
+    assert "public_url" in result.output
+    assert "Traceback" not in result.output
 
 
 def test_doctor_offline_skips_the_network(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

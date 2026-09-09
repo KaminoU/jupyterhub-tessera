@@ -24,6 +24,10 @@ The bench token store is disposable: after upgrading the installed wheel
 across a schema change, delete `tessera-bench.db` and restart the Hub
 (there is deliberately no migration code before the first release).
 
+The rest of the lifecycle, stopping the bench itself and the other files a
+run leaves behind, is in
+[Stopping and purging the bench](#stopping-and-purging-the-bench).
+
 The admin console is served at `http://localhost:8008` (credentials `admin` /
 `admin`). The default port is 8008 so this bench can run next to the
 upstream kstlib bench, which keeps the usual 8080; set `KEYCLOAK_PORT` to
@@ -122,3 +126,88 @@ fixtures (`TESSERA_DB_KEY`, `TESSERA_CLIENT_SECRET`) and grants users the
 `access:services!service=tessera` scope, which no user holds by default.
 A tier-1 test loads `infra/servers.yml` on every run, so the bench
 configuration cannot drift from the documented realms.
+
+## Stopping and purging the bench
+
+`docker compose down` stops Keycloak, and that is one process out of four.
+The Hub, the proxy it starts and the Hub-managed tessera service are three
+more, and they are stopped the way any deployment is stopped: SIGTERM to
+the Hub, never `kill -9`, then a check that the ports came back. The
+procedure, the port check and the way to find an orphan are in
+{doc}`/guide/deployment`, under "Stopping and restarting cleanly".
+
+Two of those ports are the bench's own: the tessera service is declared on
+10101 in `infra/jupyterhub_config.py`, and Keycloak answers on 8008. The
+three others are JupyterHub defaults that the bench never overrides, and
+the port table of that same guide names them and says which process holds
+each one.
+
+### The launch directory decides where the bench writes
+
+The Hub configuration resolves its own paths, so it can be started from any
+directory. The files a run produces do not follow it: they are created in
+the working directory of the process, and there are four of them.
+
+| File                       | Written by | What deleting it costs                                   |
+| -------------------------- | ---------- | -------------------------------------------------------- |
+| `tessera-bench.db`         | tessera    | every stored token: sign in again on each server         |
+| `jupyterhub.sqlite`        | the Hub    | every issued token and all Hub-side user state           |
+| `jupyterhub_cookie_secret` | the Hub    | the open browser sessions, regenerated at the next start |
+| `jupyterhub-proxy.pid`     | the proxy  | nothing, it is rewritten at the next start               |
+
+The quick start above changes into `infra/` first, so the four land there;
+starting from the repository root, as the configuration docstring shows,
+drops them at the top of the tree instead. Both places are ignored by git,
+so the only symptom of alternating between the two is two sets of files and
+a bench that looks empty when it is not.
+
+Of the four, only `tessera-bench.db` is a routine reset, and only across a
+schema change. The other three are rarely the answer:
+
+- A changed RBAC directive needs no purge. Roles and role assignments are
+  reconciled from the configuration at every Hub start, so restarting the
+  Hub is what applies them. What a restart does not change is a token
+  already issued: signing in again, and restarting the single-user server,
+  is what hands out a new one. Which credential carries which scope is in
+  {doc}`/api/service`.
+- Keycloak needs no `-v`. The compose file declares no named volume and the
+  development-mode database lives inside the container, so `docker compose
+down` already discards the runtime state, and the next `up -d` re-imports
+  the realms.
+
+### Inspecting the token store
+
+The store is a SQLCipher database, encrypted with the key the Hub
+configuration injects as `TESSERA_DB_KEY`. A SQLCipher 4 client opens it
+with that key and nothing else:
+
+```python
+from sqlcipher3 import dbapi2 as sqlcipher
+
+conn = sqlcipher.connect("tessera-bench.db")
+conn.execute("PRAGMA key = 'KEY'")  # the TESSERA_DB_KEY value of the bench
+print(conn.execute("SELECT name FROM sqlite_master").fetchall())
+```
+
+A client configured for the older parameter generation fails on that same
+file even with the right key, and says nothing about why:
+
+```text
+>>> conn.execute("PRAGMA cipher_compatibility = 3")   # issued after the key
+>>> conn.execute("SELECT name FROM sqlite_master")
+sqlcipher3.dbapi2.DatabaseError: file is not a database
+```
+
+That message does not discriminate: a wrong key produces exactly the same
+error on the same file. The reason reaches the process standard error only,
+as `hmac check failed for pgno=1`. The cure is `PRAGMA
+cipher_compatibility = 4` on a fresh connection, issued after `PRAGMA key`,
+since a cipher pragma set before the key has no effect at all.
+
+Those parameters belong to the SQLCipher build that is linked, not to
+tessera: neither tessera nor kstlib sets a cipher pragma, only `PRAGMA
+key`. Measured on 2026-09-09 in the project environment, the `sqlcipher3`
+binding 2.6.0 on engine 4.12.0 community reports a page size of 4096,
+`kdf_iter` 256000, HMAC-SHA512 and PBKDF2-HMAC-SHA512. Read them from your
+own build rather than trusting that list, and see
+{doc}`/guide/configuration` for how a real deployment holds the key.

@@ -12,7 +12,7 @@ __app_name__ = "tessera"
 # imports as ``tessera`` but ships as ``jupyterhub-tessera`` on PyPI. Use
 # ``__dist_name__`` for installed-metadata lookups (importlib.metadata).
 __dist_name__ = "jupyterhub-tessera"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __description__ = (
     "JupyterHub/JupyterLab plugin to acquire and securely store OAuth2/OIDC "
     "tokens, with a per-server status button."

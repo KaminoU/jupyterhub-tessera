@@ -132,6 +132,25 @@ where `public_url` is the base URL your users reach the Hub at. It is
 deliberately not configurable on its own, and it is never built from
 request input. Write it down now: you need the exact string in step 3.
 
+Because the callback is derived, it changes whenever the URL your users
+type changes. Interposing anything in front of the Hub, a reverse proxy, a
+tunnel, a port forward or an ingress, therefore leaves exactly two
+outcomes: either the interposition preserves the URL the browser sees, and
+there is nothing to do, or it changes it, and then `public_url` must change
+**and** the resulting redirect URI must be registered again at every
+provider. One without the other yields a callback the provider rejects.
+
+Three details decide whether the two strings actually match:
+
+- The host is carried verbatim, case included, and providers compare
+  redirect URIs literally.
+- A `redirect_uri` key written into the configuration is ignored in
+  silence rather than rejected: nothing in the file overrides the derived
+  value.
+- A base path is accepted here (`https://hub.example.org/jupyter`) and
+  checked later: the service refuses to start unless the Hub really serves
+  it under that path.
+
 ## 3. Register the OAuth client at your provider
 
 On your identity provider, create a **confidential** client (one with a
@@ -146,6 +165,22 @@ survives the browser session. Without it, users have to sign in again far
 more often.
 
 Keep the client ID and the client secret: the next step references them.
+
+Where the identity provider belongs to another team, those requirements
+have to travel as a request rather than as a procedure:
+
+```text
+Client type:  confidential (a client secret is issued)
+Grants:       authorization_code, refresh_token
+PKCE:         S256 (always sent by the client)
+Redirect URI: <public_url>/services/tessera/callback, matched exactly
+Scopes:       openid, plus offline_access for a refresh token that
+              outlives the browser session
+Send back:    the client ID and the client secret
+```
+
+Everything else is a deployment choice rather than a tessera requirement:
+token lifetimes, consent behavior and provider-specific switches are yours.
 
 ## 4. Write the configuration file
 

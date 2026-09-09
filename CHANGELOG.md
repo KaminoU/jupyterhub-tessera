@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-09
+
 ### Added
 
 - A pre-commit and CI check now compares the import roots of src/tessera
@@ -15,9 +17,22 @@ and this project adheres to
   distribution with its declared dependencies only and imports every
   module it ships, run locally through tox on every supported Python
   version and in CI against the artifact that gets published.
+- Deployment guide: what a derived callback URL imposes when anything is
+  interposed in front of the Hub, and the OAuth client requirements in a
+  form that can be handed to whoever runs the identity provider.
 
 ### Changed
 
+- URL validation is stricter, so a configuration that 1.0.0 loaded can
+  now be refused: the service exits at startup instead of running with a
+  value it cannot use. Three classes are affected, each with a direct
+  remedy. A URL carrying any character outside printable ASCII is
+  refused, so an internationalized host has to be written in its
+  punycode `xn--` form. A userinfo component before the host is refused,
+  so it has to be removed. A URL longer than 2048 characters is refused,
+  so it has to be shortened. This covers the URLs of the configuration
+  file, `service.public_url` and the provider endpoints, and the
+  endpoints read from a provider's discovery document.
 - kstlib floor raised to 3.7.1. Versions up to 3.7.0 imported
   typing_extensions at module level without declaring it, which made them
   unimportable on Python 3.13+ from a clean install. tessera was never
@@ -25,6 +40,25 @@ and this project adheres to
   alembic, pydantic and sqlalchemy, so the module was always present. The
   floor moves so the guarantee comes from our own constraint rather than
   from a transitive one we do not control.
+
+### Fixed
+
+- URL validation now rejects an authority that cannot be one: a host
+  carrying characters that cannot appear in a hostname (typically the
+  residue of an unexpanded shell variable or a template placeholder), a
+  host whose labels are malformed or oversized, a non-numeric port, and a
+  userinfo component before the host. A malformed URL now raises the
+  validator's own error instead of a bare parser exception. Such a
+  `public_url` used to be reported as ok by `tessera doctor`, and the
+  failure only surfaced in the browser; the configuration is now refused
+  at load time with the field named. The same validator guards URLs read
+  from a provider's discovery document.
+
+### Security
+
+- URL validation now bounds its input (length, printable ASCII) before
+  parsing, so control characters can no longer survive into a URL derived
+  from the configuration or from a provider's discovery document.
 
 ## [1.0.0] - 2026-08-10
 
@@ -89,5 +123,6 @@ and this project adheres to
   per credential and wired in the bench configuration; the panel points
   at the right directive when the grant is missing.
 
-[Unreleased]: https://github.com/KaminoU/jupyterhub-tessera/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/KaminoU/jupyterhub-tessera/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/KaminoU/jupyterhub-tessera/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/KaminoU/jupyterhub-tessera/releases/tag/v1.0.0

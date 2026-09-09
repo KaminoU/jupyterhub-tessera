@@ -14,6 +14,10 @@ dist/
 build/
 htmlcov/
 
+# Net for the tox workdir: tox.ini keeps it out of the tree, but a fallback
+# that ever resolved relative would land it here.
+temp/
+
 # Node / TypeScript / JupyterLab extension build artifacts
 node_modules/
 lib/
@@ -33,6 +37,10 @@ yarn-error.log*
 *.key
 *.pem
 .env
+
+# Bench artifacts JupyterHub writes into its working directory
+jupyterhub_cookie_secret
+jupyterhub-proxy.pid
 
 # Local full-suite marker (never versioned; needed because /.github is re-allowed above)
 .github/.tests-passed

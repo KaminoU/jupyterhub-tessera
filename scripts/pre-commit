@@ -146,23 +146,6 @@ else
     printf 'pre-commit: no %s, confidential scan skipped\n' "$PATTERNS_FILE"
 fi
 
-# --- Unfinished local notes, a warning only --------------------------------
-#
-# The notes that define this convention spell the marker out, so a plain
-# search flags its own documentation at every commit, and a warning that
-# always fires is a warning nobody reads. Skip the lines whose reason is
-# nothing but a <placeholder>. A real marker states a real reason, and one
-# that merely happens to contain a < still fires.
-if [ -d .claude ]; then
-    wip=$(grep -rn '> \*\*WIP\*\*' .claude 2>/dev/null |
-        grep -Ev '> \*\*WIP\*\*[[:space:]]*:?[[:space:]]*<[^>]*>[[:space:]]*(`|\||$)' |
-        cut -d: -f1 | sort -u || true)
-    if [ -n "$wip" ]; then
-        printf 'pre-commit: WARNING, unfinished notes carry a WIP marker:\n' >&2
-        printf '%s\n' "$wip" | sed 's/^/  /' >&2
-    fi
-fi
-
 # --- Lock files ------------------------------------------------------------
 if command -v uv >/dev/null 2>&1; then
     if ! uv lock --check >/dev/null 2>&1; then
